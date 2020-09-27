@@ -3,6 +3,8 @@ const multer = require('multer')
 const AWS = require('aws-sdk')
 const uuid = require('uuid/v4')
 const stream = require('stream')
+const fs = require('fs')
+const cors = require('cors')
 
 require('dotenv/config')
 
@@ -32,6 +34,7 @@ app.post('/upload', upload, (req, res)=>{
         Body: req.file.buffer
     }
 
+    console.log(params.Key)
     s3.upload(params, (error, data)=>{
         if (!error) {
             res.status(200).send(data)
@@ -42,8 +45,25 @@ app.post('/upload', upload, (req, res)=>{
       
 })
 
+app.get('/downloadImage/:filename', (req, res) => {
+    const downloadParams = {
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: req.params.filename
+    }
+    let file = fs.createWriteStream('./downloads/'+downloadParams.Key)
+    s3.getObject(downloadParams)
+        .createReadStream()
+        .on('error', (err)=>{
+            res.status(500).json({error: "Error -> " +err})
+        })
+        .on('end', ()=>{
+            res.status(200).json({success: 'file successfully downloaded'})
+        })
+        .pipe(file)
+})
 
-app.get('/image/:filename', (req, res) => {
+app.use('/api/image/:filename', cors())
+app.get('/api/image/:filename', (req, res)=>{
     const downloadParams = {
         Bucket: process.env.AWS_BUCKET_NAME,
         Key: req.params.filename
@@ -51,6 +71,7 @@ app.get('/image/:filename', (req, res) => {
     s3.getObject(downloadParams)
         .createReadStream()
         .on('error', (err)=>{
-            res.status(500).json({error: "Error -> " +err})
-        }).pipe(res).write
+            res.status(500).json({error: err})
+        })
+        .pipe(res).send
 })
